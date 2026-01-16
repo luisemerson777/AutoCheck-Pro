@@ -1,0 +1,8 @@
+
+{
+  "name": "AutoCheck Pro - Sistema de Inspeção",
+  "description": "Uma plataforma moderna e intuitiva para checklists de veículos, projetada para oficinas mecânicas com estética em branco e azul ciano.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
