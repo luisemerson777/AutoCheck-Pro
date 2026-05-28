@@ -5,12 +5,37 @@ const Login = ({ onLogin }) => {
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!onLogin) return;
-    onLogin({ username: user, password }, (u) => {}, (err) => setError(err || 'Falha ao autenticar'));
+    
+    if (!user || !password) {
+      setError('Preencha usuário e senha');
+      return;
+    }
+
+    if (!onLogin) {
+      setError('Erro ao inicializar login');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      onLogin(
+        { username: user, password }, 
+        (u) => {
+          console.log('✅ Login realizado:', u);
+        }, 
+        (err) => {
+          setError(err || 'Falha ao autenticar');
+          console.error('❌ Erro de login:', err);
+        }
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -24,15 +49,43 @@ const Login = ({ onLogin }) => {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Usuário</label>
-            <input required className="w-full px-5 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none" placeholder="luis" value={user} onChange={(e) => setUser(e.target.value)} />
+            <input 
+              required 
+              className="w-full px-5 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none border border-slate-200 dark:border-slate-700 focus:border-[#1D63BD]" 
+              placeholder="luis" 
+              value={user} 
+              onChange={(e) => setUser(e.target.value)}
+              disabled={isLoading}
+            />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Senha</label>
-            <input required type="password" className="w-full px-5 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none" placeholder="••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <input 
+              required 
+              type="password" 
+              className="w-full px-5 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl outline-none border border-slate-200 dark:border-slate-700 focus:border-[#1D63BD]" 
+              placeholder="••••••" 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
+            />
           </div>
-          {error && <div className="text-red-500 text-sm font-bold">{error}</div>}
-          <button type="submit" className="w-full py-3 bg-[#1D63BD] text-white font-bold rounded-2xl">Acessar</button>
-          <div className="mt-6 text-center text-xs text-slate-400">AutoCheck © 2024</div>
+          {error && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm font-bold rounded-lg">
+              {error}
+            </div>
+          )}
+          <button 
+            type="submit" 
+            disabled={isLoading}
+            className={`w-full py-3 ${isLoading ? 'bg-slate-400' : 'bg-[#1D63BD] hover:bg-[#154A8D]'} text-white font-bold rounded-2xl transition-colors`}
+          >
+            {isLoading ? 'Autenticando...' : 'Acessar'}
+          </button>
+          <div className="mt-6 text-center text-xs text-slate-400">
+            <p>AutoCheck © 2024</p>
+            <p className="mt-2 text-slate-500">Usando Supabase PostgreSQL</p>
+          </div>
         </form>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { INITIAL_FORM_STATE } from './constants';
 import InspectionForm from './components/InspectionForm';
 import HistoryView from './components/HistoryView';
 import Login from './components/Login';
+import { supabase } from './supabaseClient';
 
 // Componente principal da aplicação
 const App = () => {
@@ -30,41 +31,100 @@ const App = () => {
     if (typeof window !== 'undefined') window.localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
-  // Carrega histórico da API
+  // Carrega histórico do Supabase
   useEffect(() => {
     if (!isAuthenticated) return;
-    const load = async () => {
+    const loadInspections = async () => {
       try {
-        const res = await fetch('/api/inspections');
-        if (res.ok) {
-          const json = await res.json();
-          setHistory(json.inspections || []);
+        const { data, error } = await supabase
+          .from('inspecoes')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('❌ Erro ao buscar inspeções:', error.message);
+          return;
         }
-      } catch (e) { console.error('Erro ao buscar histórico', e); }
+        
+        setHistory(data || []);
+      } catch (err) {
+        console.error('❌ Erro inesperado ao buscar histórico:', err);
+      }
     };
-    load();
+    
+    loadInspections();
   }, [isAuthenticated]);
 
-  // Salvar inspeção via API
+  // Salvar inspeção no Supabase
   const handleSaveToHistory = useCallback(async (data) => {
     try {
-      const res = await fetch('/api/inspections', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-      if (res.ok) {
-        const json = await res.json();
-        setHistory(p => [json.inspection, ...p.filter(i => i.id !== json.inspection.id)]);
-        if (data.vehicle?.brandModel) setSavedVehicles(p => Array.from(new Set([...(p || []), data.vehicle.brandModel])));
-        setActiveTab('history');
-        setFormData(INITIAL_FORM_STATE);
-      }
-    } catch (e) { console.error('Erro ao salvar inspeção', e); }
-  }, []);
+      const inspection = {
+        id: data.id || Date.now(),
+        date: data.date || new Date().toISOString(),
+        client: data.client,
+        vehicle: data.vehicle,
+        tires: data.tires,
+        fluids: data.fluids,
+        safety: data.safety,
+        electrical: data.electrical,
+        checkout: data.checkout,
+        partsUsed: data.partsUsed,
+        observations: data.observations,
+        totalValue: data.totalValue,
+        user: currentUser,
+      };
 
-  // Deletar inspeção via API
+      const { data: savedData, error } = await supabase
+        .from('inspecoes')
+        .upsert([inspection], { onConflict: 'id' })
+        .select();
+
+      if (error) {
+        console.error('❌ Erro ao salvar inspeção:', error.message);
+        alert('Erro ao salvar inspeção. Tente novamente.');
+        return;
+      }
+
+      console.log('✅ Inspeção salva com sucesso:', savedData);
+      
+      // Atualiza o histórico localmente
+      setHistory(p => {
+        const filtered = p.filter(i => String(i.id) !== String(inspection.id));
+        return [savedData?.[0] || inspection, ...filtered];
+      });
+
+      if (data.vehicle?.brandModel) {
+        setSavedVehicles(p => Array.from(new Set([...(p || []), data.vehicle.brandModel])));
+      }
+      
+      setActiveTab('history');
+      setFormData(INITIAL_FORM_STATE);
+    } catch (err) {
+      console.error('❌ Erro inesperado ao salvar inspeção:', err);
+      alert('Erro ao salvar inspeção.');
+    }
+  }, [currentUser]);
+
+  // Deletar inspeção do Supabase
   const handleDeleteInspection = useCallback(async (id) => {
     try {
-      const res = await fetch(`/api/inspections/${id}`, { method: 'DELETE' });
-      if (res.ok) setHistory(p => p.filter(i => i.id !== id));
-    } catch (e) { console.error('Erro ao deletar', e); }
+      const { error } = await supabase
+        .from('inspecoes')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('❌ Erro ao deletar inspeção:', error.message);
+        alert('Erro ao deletar inspeção.');
+        return;
+      }
+
+      console.log('✅ Inspeção deletada com sucesso');
+      setHistory(p => p.filter(i => String(i.id) !== String(id)));
+    } catch (err) {
+      console.error('❌ Erro inesperado ao deletar inspeção:', err);
+      alert('Erro ao deletar inspeção.');
+    }
   }, []);
 
   const handleAddSection = useCallback((cat, title) => setCustomSections(p => ({ ...p, [cat]: [...(p[cat]||[]), { id: Date.now(), title, fields: [] }] })), []);
@@ -74,25 +134,50 @@ const App = () => {
 
   const handleDeleteVehicle = useCallback((v) => setSavedVehicles(p => p.filter(x => x !== v)), []);
 
-  // Autenticação via API
+  // Autenticação via API (mantém compatibilidade com backend Python)
   const handleLogin = useCallback(async ({ username, password }, onSuccess, onError) => {
     try {
-      const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
+      const res = await fetch('/api/login', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ username, password }) 
+      });
+
       if (res.ok) {
         const json = await res.json();
-        setIsAuthenticated(true); setCurrentUser(json.user);
-        if (typeof window !== 'undefined') { window.localStorage.setItem('autocheck_auth', 'true'); window.localStorage.setItem('autocheck_user', json.user); }
+        setIsAuthenticated(true);
+        setCurrentUser(json.user);
+        
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('autocheck_auth', 'true');
+          window.localStorage.setItem('autocheck_user', json.user);
+        }
+        
+        console.log('✅ Autenticação realizada:', json.user);
         if (onSuccess) onSuccess(json.user);
       } else {
         const err = await res.json().catch(() => ({}));
-        if (onError) onError(err.message || 'Erro ao autenticar');
+        const errorMsg = err.message || 'Credenciais inválidas';
+        console.error('❌ Erro de autenticação:', errorMsg);
+        if (onError) onError(errorMsg);
       }
-    } catch (e) { if (onError) onError('Erro de conexão'); }
+    } catch (err) {
+      console.error('❌ Erro de conexão ao autenticar:', err);
+      if (onError) onError('Erro de conexão com o servidor');
+    }
   }, []);
 
   const handleLogout = useCallback(() => {
-    setIsAuthenticated(false); setCurrentUser(null);
-    if (typeof window !== 'undefined') { window.localStorage.removeItem('autocheck_auth'); window.localStorage.removeItem('autocheck_user'); }
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setHistory([]);
+    
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('autocheck_auth');
+      window.localStorage.removeItem('autocheck_user');
+    }
+    
+    console.log('✅ Desconectado com sucesso');
   }, []);
 
   if (!isAuthenticated) return <Login onLogin={handleLogin} />;
