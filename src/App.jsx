@@ -3,7 +3,7 @@ import { INITIAL_FORM_STATE } from './constants';
 import InspectionForm from './components/InspectionForm';
 import HistoryView from './components/HistoryView';
 import Login from './components/Login';
-import { supabase } from './supabaseClient';
+import { inspectionsAPI, authAPI } from './api';
 
 // Componente principal da aplicação
 const App = () => {
@@ -31,18 +31,15 @@ const App = () => {
     if (typeof window !== 'undefined') window.localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
-  // Carrega histórico do Supabase
+  // Carrega histórico do Supabase ou API local
   useEffect(() => {
     if (!isAuthenticated) return;
     const loadInspections = async () => {
       try {
-        const { data, error } = await supabase
-          .from('inspecoes')
-          .select('*')
-          .order('created_at', { ascending: false });
+        const { data, error } = await inspectionsAPI.getAll();
         
         if (error) {
-          console.error('❌ Erro ao buscar inspeções:', error.message);
+          console.error('❌ Erro ao buscar inspeções:', error);
           return;
         }
         
@@ -55,7 +52,7 @@ const App = () => {
     loadInspections();
   }, [isAuthenticated]);
 
-  // Salvar inspeção no Supabase
+  // Salvar inspeção no Supabase ou API local
   const handleSaveToHistory = useCallback(async (data) => {
     try {
       const inspection = {
@@ -74,13 +71,10 @@ const App = () => {
         user: currentUser,
       };
 
-      const { data: savedData, error } = await supabase
-        .from('inspecoes')
-        .upsert([inspection], { onConflict: 'id' })
-        .select();
+      const { data: savedData, error } = await inspectionsAPI.upsert(inspection);
 
       if (error) {
-        console.error('❌ Erro ao salvar inspeção:', error.message);
+        console.error('❌ Erro ao salvar inspeção:', error);
         alert('Erro ao salvar inspeção. Tente novamente.');
         return;
       }
@@ -90,7 +84,7 @@ const App = () => {
       // Atualiza o histórico localmente
       setHistory(p => {
         const filtered = p.filter(i => String(i.id) !== String(inspection.id));
-        return [savedData?.[0] || inspection, ...filtered];
+        return [savedData || inspection, ...filtered];
       });
 
       if (data.vehicle?.brandModel) {
@@ -105,16 +99,13 @@ const App = () => {
     }
   }, [currentUser]);
 
-  // Deletar inspeção do Supabase
+  // Deletar inspeção do Supabase ou API local
   const handleDeleteInspection = useCallback(async (id) => {
     try {
-      const { error } = await supabase
-        .from('inspecoes')
-        .delete()
-        .eq('id', id);
+      const { error } = await inspectionsAPI.delete(id);
 
       if (error) {
-        console.error('❌ Erro ao deletar inspeção:', error.message);
+        console.error('❌ Erro ao deletar inspeção:', error);
         alert('Erro ao deletar inspeção.');
         return;
       }
@@ -134,33 +125,27 @@ const App = () => {
 
   const handleDeleteVehicle = useCallback((v) => setSavedVehicles(p => p.filter(x => x !== v)), []);
 
-  // Autenticação via API (mantém compatibilidade com backend Python)
+  // Autenticação via API local
   const handleLogin = useCallback(async ({ username, password }, onSuccess, onError) => {
     try {
-      const res = await fetch('/api/login', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ username, password }) 
-      });
+      const { data, error } = await authAPI.login(username, password);
 
-      if (res.ok) {
-        const json = await res.json();
-        setIsAuthenticated(true);
-        setCurrentUser(json.user);
-        
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem('autocheck_auth', 'true');
-          window.localStorage.setItem('autocheck_user', json.user);
-        }
-        
-        console.log('✅ Autenticação realizada:', json.user);
-        if (onSuccess) onSuccess(json.user);
-      } else {
-        const err = await res.json().catch(() => ({}));
-        const errorMsg = err.message || 'Credenciais inválidas';
-        console.error('❌ Erro de autenticação:', errorMsg);
-        if (onError) onError(errorMsg);
+      if (error) {
+        console.error('❌ Erro de autenticação:', error);
+        if (onError) onError(error);
+        return;
       }
+
+      setIsAuthenticated(true);
+      setCurrentUser(data.username || username);
+      
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('autocheck_auth', 'true');
+        window.localStorage.setItem('autocheck_user', data.username || username);
+      }
+      
+      console.log('✅ Autenticação realizada:', data.username || username);
+      if (onSuccess) onSuccess(data.username || username);
     } catch (err) {
       console.error('❌ Erro de conexão ao autenticar:', err);
       if (onError) onError('Erro de conexão com o servidor');
