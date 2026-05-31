@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "dist" } },
+    { "src": "api/*.py", "use": "@vercel/python" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/app.py" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ],
+  "env": {
+    "DATABASE_URL": "@neon_database_url",
+    "VITE_API_URL": "https://eng-software-one.vercel.app/api"
+  }
+}

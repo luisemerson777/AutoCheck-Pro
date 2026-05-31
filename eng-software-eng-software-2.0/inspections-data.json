@@ -1,0 +1,16 @@
+[
+  {
+    "id": 1780010889810,
+    "client": {
+      "name": "João Silva",
+      "phone": "11999999999"
+    },
+    "vehicle": {
+      "brandModel": "Honda Civic",
+      "plate": "ABC1234"
+    },
+    "observations": "Teste de inspeção",
+    "created_at": "2026-05-28T23:28:09.810Z",
+    "updated_at": "2026-05-28T23:28:09.810Z"
+  }
+]
