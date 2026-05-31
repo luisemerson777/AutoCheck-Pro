@@ -5,8 +5,6 @@
 
 import { supabase } from './supabaseClient';
 
-const API_LOCAL = 'http://localhost:3001/api';
-
 // Detecta se Supabase está configurado
 const isSupabaseConfigured = () => {
   return (
@@ -17,15 +15,11 @@ const isSupabaseConfigured = () => {
   );
 };
 
-const getSupabaseClient = () => (isSupabaseConfigured() ? supabase : null);
-
-const localFetch = async (endpoint, options = {}) => {
-  const res = await fetch(`${API_LOCAL}${endpoint}`, options);
-  if (!res.ok) {
-    const json = await res.json().catch(() => ({}));
-    throw new Error(json.error || 'Erro na API local');
+const getSupabaseClient = () => {
+  if (!supabase) {
+    throw new Error('Supabase não configurado. Verifique VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.');
   }
-  return res.json();
+  return supabase;
 };
 
 // ============ OPERAÇÕES DE INSPEÇÕES ============
@@ -37,18 +31,13 @@ export const inspectionsAPI = {
   async getAll() {
     try {
       const supabaseClient = getSupabaseClient();
-      if (supabaseClient) {
-        const { data, error } = await supabaseClient
-          .from('inspecoes')
-          .select('*')
-          .order('created_at', { ascending: false });
+      const { data, error } = await supabaseClient
+        .from('inspecoes')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-        if (error) throw new Error(error.message);
-        return { data: data || [], error: null };
-      }
-
-      const localResponse = await localFetch('/inspections');
-      return localResponse;
+      if (error) throw new Error(error.message);
+      return { data: data || [], error: null };
     } catch (err) {
       console.error('❌ Erro ao buscar inspeções:', err.message);
       return { data: [], error: err.message };
@@ -61,19 +50,14 @@ export const inspectionsAPI = {
   async getById(id) {
     try {
       const supabaseClient = getSupabaseClient();
-      if (supabaseClient) {
-        const { data, error } = await supabaseClient
-          .from('inspecoes')
-          .select('*')
-          .eq('id', id)
-          .single();
+      const { data, error } = await supabaseClient
+        .from('inspecoes')
+        .select('*')
+        .eq('id', id)
+        .single();
 
-        if (error) throw new Error(error.message);
-        return { data, error: null };
-      }
-
-      const localResponse = await localFetch(`/inspections/${id}`);
-      return localResponse;
+      if (error) throw new Error(error.message);
+      return { data, error: null };
     } catch (err) {
       console.error('❌ Erro ao buscar inspeção:', err.message);
       return { data: null, error: err.message };
@@ -93,22 +77,13 @@ export const inspectionsAPI = {
       };
 
       const supabaseClient = getSupabaseClient();
-      if (supabaseClient) {
-        const { data, error } = await supabaseClient
-          .from('inspecoes')
-          .insert([inspectionData])
-          .select();
+      const { data, error } = await supabaseClient
+        .from('inspecoes')
+        .insert([inspectionData])
+        .select();
 
-        if (error) throw new Error(error.message);
-        return { data: data?.[0], error: null };
-      }
-
-      const localResponse = await localFetch('/inspections', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(inspectionData),
-      });
-      return localResponse;
+      if (error) throw new Error(error.message);
+      return { data: data?.[0], error: null };
     } catch (err) {
       console.error('❌ Erro ao criar inspeção:', err.message);
       return { data: null, error: err.message };
@@ -127,22 +102,13 @@ export const inspectionsAPI = {
       };
 
       const supabaseClient = getSupabaseClient();
-      if (supabaseClient) {
-        const { data, error } = await supabaseClient
-          .from('inspecoes')
-          .upsert([inspectionData], { onConflict: 'id' })
-          .select();
+      const { data, error } = await supabaseClient
+        .from('inspecoes')
+        .upsert([inspectionData], { onConflict: 'id' })
+        .select();
 
-        if (error) throw new Error(error.message);
-        return { data: data?.[0], error: null };
-      }
-
-      const localResponse = await localFetch(`/inspections/${inspectionData.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(inspectionData),
-      });
-      return localResponse;
+      if (error) throw new Error(error.message);
+      return { data: data?.[0], error: null };
     } catch (err) {
       console.error('❌ Erro ao salvar inspeção:', err.message);
       return { data: null, error: err.message };
@@ -155,20 +121,13 @@ export const inspectionsAPI = {
   async delete(id) {
     try {
       const supabaseClient = getSupabaseClient();
-      if (supabaseClient) {
-        const { error } = await supabaseClient
-          .from('inspecoes')
-          .delete()
-          .eq('id', id);
+      const { error } = await supabaseClient
+        .from('inspecoes')
+        .delete()
+        .eq('id', id);
 
-        if (error) throw new Error(error.message);
-        return { error: null };
-      }
-
-      const localResponse = await localFetch(`/inspections/${id}`, {
-        method: 'DELETE',
-      });
-      return localResponse;
+      if (error) throw new Error(error.message);
+      return { error: null };
     } catch (err) {
       console.error('❌ Erro ao deletar inspeção:', err.message);
       return { error: err.message };
@@ -210,19 +169,9 @@ export const authAPI = {
 export const getApiStatus = async () => {
   const status = {
     supabase: isSupabaseConfigured() ? 'configurado' : 'não configurado',
-    localApi: 'verificando...',
+    localApi: 'desabilitado',
     mode: isSupabaseConfigured() ? 'produção' : 'desenvolvimento',
   };
-
-  // Tentar conectar com API local
-  try {
-    const res = await fetch(`${API_LOCAL}/health`, { signal: AbortSignal.timeout(3000) });
-    if (res.ok) {
-      status.localApi = 'disponível';
-    }
-  } catch {
-    status.localApi = 'indisponível';
-  }
 
   return status;
 };
