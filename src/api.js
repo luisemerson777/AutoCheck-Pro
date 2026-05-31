@@ -12,8 +12,20 @@ const isSupabaseConfigured = () => {
   return (
     import.meta.env.VITE_SUPABASE_URL &&
     import.meta.env.VITE_SUPABASE_ANON_KEY &&
-    import.meta.env.VITE_SUPABASE_URL !== 'https://seu-projeto-aqui.supabase.co'
+    import.meta.env.VITE_SUPABASE_URL !== 'https://seu-projeto-aqui.supabase.co' &&
+    (import.meta.env.VITE_SUPABASE_URL.startsWith('http://') || import.meta.env.VITE_SUPABASE_URL.startsWith('https://'))
   );
+};
+
+const getSupabaseClient = () => (isSupabaseConfigured() ? supabase : null);
+
+const localFetch = async (endpoint, options = {}) => {
+  const res = await fetch(`${API_LOCAL}${endpoint}`, options);
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error || 'Erro na API local');
+  }
+  return res.json();
 };
 
 // ============ OPERAÇÕES DE INSPEÇÕES ============
@@ -24,21 +36,19 @@ export const inspectionsAPI = {
    */
   async getAll() {
     try {
-      if (isSupabaseConfigured()) {
-        // Usar Supabase
-        const { data, error } = await supabase
+      const supabaseClient = getSupabaseClient();
+      if (supabaseClient) {
+        const { data, error } = await supabaseClient
           .from('inspecoes')
           .select('*')
           .order('created_at', { ascending: false });
-        
+
         if (error) throw new Error(error.message);
         return { data: data || [], error: null };
-      } else {
-        // Usar API local
-        const res = await fetch(`${API_LOCAL}/inspections`);
-        const json = await res.json();
-        return json;
       }
+
+      const localResponse = await localFetch('/inspections');
+      return localResponse;
     } catch (err) {
       console.error('❌ Erro ao buscar inspeções:', err.message);
       return { data: [], error: err.message };
@@ -50,20 +60,20 @@ export const inspectionsAPI = {
    */
   async getById(id) {
     try {
-      if (isSupabaseConfigured()) {
-        const { data, error } = await supabase
+      const supabaseClient = getSupabaseClient();
+      if (supabaseClient) {
+        const { data, error } = await supabaseClient
           .from('inspecoes')
           .select('*')
           .eq('id', id)
           .single();
-        
+
         if (error) throw new Error(error.message);
         return { data, error: null };
-      } else {
-        const res = await fetch(`${API_LOCAL}/inspections/${id}`);
-        const json = await res.json();
-        return json;
       }
+
+      const localResponse = await localFetch(`/inspections/${id}`);
+      return localResponse;
     } catch (err) {
       console.error('❌ Erro ao buscar inspeção:', err.message);
       return { data: null, error: err.message };
@@ -82,23 +92,23 @@ export const inspectionsAPI = {
         updated_at: inspection.updated_at || new Date().toISOString(),
       };
 
-      if (isSupabaseConfigured()) {
-        const { data, error } = await supabase
+      const supabaseClient = getSupabaseClient();
+      if (supabaseClient) {
+        const { data, error } = await supabaseClient
           .from('inspecoes')
           .insert([inspectionData])
           .select();
-        
+
         if (error) throw new Error(error.message);
         return { data: data?.[0], error: null };
-      } else {
-        const res = await fetch(`${API_LOCAL}/inspections`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(inspectionData),
-        });
-        const json = await res.json();
-        return json;
       }
+
+      const localResponse = await localFetch('/inspections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(inspectionData),
+      });
+      return localResponse;
     } catch (err) {
       console.error('❌ Erro ao criar inspeção:', err.message);
       return { data: null, error: err.message };
@@ -116,23 +126,23 @@ export const inspectionsAPI = {
         updated_at: new Date().toISOString(),
       };
 
-      if (isSupabaseConfigured()) {
-        const { data, error } = await supabase
+      const supabaseClient = getSupabaseClient();
+      if (supabaseClient) {
+        const { data, error } = await supabaseClient
           .from('inspecoes')
           .upsert([inspectionData], { onConflict: 'id' })
           .select();
-        
+
         if (error) throw new Error(error.message);
         return { data: data?.[0], error: null };
-      } else {
-        const res = await fetch(`${API_LOCAL}/inspections/${inspectionData.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(inspectionData),
-        });
-        const json = await res.json();
-        return json;
       }
+
+      const localResponse = await localFetch(`/inspections/${inspectionData.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(inspectionData),
+      });
+      return localResponse;
     } catch (err) {
       console.error('❌ Erro ao salvar inspeção:', err.message);
       return { data: null, error: err.message };
@@ -144,21 +154,21 @@ export const inspectionsAPI = {
    */
   async delete(id) {
     try {
-      if (isSupabaseConfigured()) {
-        const { error } = await supabase
+      const supabaseClient = getSupabaseClient();
+      if (supabaseClient) {
+        const { error } = await supabaseClient
           .from('inspecoes')
           .delete()
           .eq('id', id);
-        
+
         if (error) throw new Error(error.message);
         return { error: null };
-      } else {
-        const res = await fetch(`${API_LOCAL}/inspections/${id}`, {
-          method: 'DELETE',
-        });
-        const json = await res.json();
-        return json;
       }
+
+      const localResponse = await localFetch(`/inspections/${id}`, {
+        method: 'DELETE',
+      });
+      return localResponse;
     } catch (err) {
       console.error('❌ Erro ao deletar inspeção:', err.message);
       return { error: err.message };
